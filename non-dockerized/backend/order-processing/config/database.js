@@ -1,25 +1,14 @@
-const {
-  username,
-  password,
-  database,
-  host,
-} = require('./index').db;
+const path = require('path');
 
 module.exports = {
   development: {
-    username,
-    password,
-    database,
-    host,
-    dialect: 'postgres',
+    dialect: 'sqlite',
+    storage: path.join(__dirname, '..', 'db', 'development.sqlite'),
     seederStorage: 'sequelize',
   },
   production: {
-    username,
-    password,
-    database,
-    host,
-    dialect: 'postgres',
+    dialect: 'sqlite',
+    storage: path.join(__dirname, '..', 'db', 'production.sqlite'),
     seederStorage: 'sequelize',
   },
 };
