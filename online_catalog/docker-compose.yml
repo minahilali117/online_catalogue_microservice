@@ -1,87 +1,55 @@
 name: online-catalog
 
 services:
-  postgres:
-    image: postgres:15-alpine
-    container_name: online-catalog-postgres
-    environment:
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-      POSTGRES_DB: ${DB_NAME:-project3_db}
+  catalog-management:
+    build:
+      context: ./backend/catalog-management
+      dockerfile: Dockerfile
+    container_name: online-catalog-management
     ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
-    networks:
-      - online_catalog_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - "8081:8081"
+    restart: unless-stopped
+
+  customer-support:
+    build:
+      context: ./backend/customer-support
+      dockerfile: Dockerfile
+    container_name: online-customer-support
+    environment:
+      NODE_ENV: development
+      PORT: 8082
+      ORDER_PROCESSING_BASE_URL: http://order-processing:8083
+    ports:
+      - "8082:8082"
+    depends_on:
+      - order-processing
+    restart: unless-stopped
+
+  order-processing:
+    build:
+      context: ./backend/order-processing
+      dockerfile: Dockerfile
+    container_name: online-order-processing
+    environment:
+      NODE_ENV: development
+      PORT: 8083
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: online-catalog-frontend
-    ports:
-      - "3000:3000"
     environment:
       REACT_APP_PRODUCTS_BASE_URL: http://localhost:8081
       REACT_APP_CUSTOMERS_BASE_URL: http://localhost:8082
-    depends_on:
-      - products_service
-      - customers_service
-    networks:
-      - online_catalog_network
-
-  products_service:
-    build:
-      context: ./backend/products-service
-      dockerfile: Dockerfile
-    container_name: online-catalog-products
+      REACT_APP_ORDER_BASE_URL: http://localhost:8083
     ports:
-      - "8081:8081"
-    environment:
-      NODE_ENV: development
-      PORT: 8081
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_NAME: ${DB_NAME:-project3_db}
+      - "3000:3000"
     depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - online_catalog_network
-
-  customers_service:
-    build:
-      context: ./backend/customers-orders-service
-      dockerfile: Dockerfile
-    container_name: online-catalog-customers
-    ports:
-      - "8082:8082"
-    environment:
-      NODE_ENV: development
-      PORT: 8082
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER:-postgres}
-      DB_PASSWORD: ${DB_PASSWORD:-postgres}
-      DB_NAME: ${DB_NAME:-project3_db}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - online_catalog_network
-
-volumes:
-  postgres_data:
-
-networks:
-  online_catalog_network:
-    driver: bridge
+      - catalog-management
+      - customer-support
+      - order-processing
+    restart: unless-stopped

@@ -488,7 +488,7 @@ function App() {
           <div className="mt-4 space-y-2">
             {statusHistory.map((entry) => (
               <div key={entry.id} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg text-sm text-gray-800 dark:text-gray-100">
-                {entry.previousStatus || 'none'} -> {entry.newStatus} at {new Date(entry.changedAt).toLocaleString()}
+                {entry.previousStatus || 'none'} to {entry.newStatus} at {new Date(entry.changedAt).toLocaleString()}
               </div>
             ))}
           </div>
