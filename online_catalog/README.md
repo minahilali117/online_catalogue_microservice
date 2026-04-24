@@ -3,11 +3,37 @@
 
 This README is a practical runbook for new users. It explains the microservices architecture, setup flow, and how to test each implemented artifact.
 
+This project now uses a shared-account collaboration model with separate IAM users and remote Terraform state.
+
+Full demo test script with expected results is available in `TESTING_GUIDE.md`.
+Collaboration onboarding details are in `COLLABORATION_SETUP.md`.
+
 ## Scope Covered
 
 1. Artifact 1: Containerization (Docker)
 2. Artifact 2: Infrastructure as Code (Terraform)
 3. Artifact 3: Configuration as Code (Ansible)
+
+## Demo Ownership and Collaboration Model
+
+1. Demo presenter: project owner runs the live demo from owner laptop.
+2. Collaborator: works on remaining implementation steps (Artifact 4 and Artifact 5) and submits code via Git.
+3. AWS model: one AWS account, separate IAM users, shared Terraform backend.
+4. Terraform state: stored in S3 and locked with DynamoDB to prevent concurrent state corruption.
+
+Shared backend used by both collaborators:
+
+```hcl
+terraform {
+	backend "s3" {
+		bucket         = "online-catalog-tf-state-186072212411"
+		key            = "prod/terraform.tfstate"
+		region         = "us-east-1"
+		dynamodb_table = "terraform-locks"
+		encrypt        = true
+	}
+}
+```
 
 ## Services and Ports
 
@@ -101,6 +127,7 @@ docker compose down
 1. AWS CLI configured.
 2. EC2 key pair exists in `us-east-1`.
 3. `terraform.tfvars` has real values, especially `ssh_ingress_cidr = "your.public.ip/32"`.
+4. `backend.tf` is configured for shared remote state.
 
 ### Apply Steps
 
@@ -114,6 +141,14 @@ terraform plan -out tfplan
 terraform apply tfplan
 terraform output
 ```
+
+If you are collaborating, always run:
+
+```powershell
+terraform plan
+```
+
+before apply, and coordinate with teammate so only one person applies at a time.
 
 ### What to Test After Apply
 
@@ -154,6 +189,7 @@ terraform output
 2. Get the public IP from `terraform output`.
 3. Copy `inventory.example.ini` to `inventory.ini` and replace the placeholder IP.
 4. Ensure your `.pem` file is available in WSL and referenced in inventory.
+5. If collaborator has updated infrastructure, run `terraform output` first and refresh inventory with current EC2 public IP.
 
 ### Run Steps
 
@@ -185,6 +221,19 @@ ansible-playbook -i inventory.ini playbooks/site.yml
 1. Docker: `docker compose build`, `docker compose up -d`, endpoint checks on ports 3000/8081/8082/8083.
 2. Terraform: `terraform validate`, `terraform plan`, `terraform apply`, `terraform output`.
 3. Ansible: `ansible -m ping`, `ansible-playbook`, SSH checks for docker/kind/kubectl.
+
+## Owner Demo Flow (Laptop)
+
+Use this sequence when you present:
+
+1. Pull latest code from main branch (including collaborator contributions).
+2. Run Docker artifact checks locally from your laptop.
+3. Run Terraform plan/apply from owner laptop only.
+4. Run Ansible checks from owner laptop only.
+5. Show outputs and screenshots as evidence.
+6. End with cleanup using `terraform destroy`.
+
+This keeps demo execution consistent and avoids concurrent infra changes during presentation.
 
 ## Cost Cleanup (Free Tier Safety)
 
