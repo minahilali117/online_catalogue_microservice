@@ -82,6 +82,14 @@ resource "aws_security_group" "app" {
 
   ingress {
     description = "Catalog service"
+    from_port   = 30081
+    to_port     = 30081
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+    ingress {
+    description = "Catalog service 2"
     from_port   = 8081
     to_port     = 8081
     protocol    = "tcp"
@@ -90,6 +98,14 @@ resource "aws_security_group" "app" {
 
   ingress {
     description = "Customer support service"
+    from_port   = 30082
+    to_port     = 30082
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+    ingress {
+    description = "Customer support service 2"
     from_port   = 8082
     to_port     = 8082
     protocol    = "tcp"
@@ -98,6 +114,14 @@ resource "aws_security_group" "app" {
 
   ingress {
     description = "Order processing service"
+    from_port   = 30083
+    to_port     = 30083
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+    ingress {
+    description = "Order processing service 2"
     from_port   = 8083
     to_port     = 8083
     protocol    = "tcp"

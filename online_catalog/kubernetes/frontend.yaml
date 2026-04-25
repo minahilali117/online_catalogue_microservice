@@ -21,11 +21,11 @@ spec:
             - containerPort: 3000
           env:
             - name: REACT_APP_PRODUCTS_BASE_URL
-              value: "http://catalog-management:8081"
+              value: "http://98.92.142.29:30081"
             - name: REACT_APP_CUSTOMERS_BASE_URL
-              value: "http://customer-support:8082"
+              value: "http://98.92.142.29:30082"
             - name: REACT_APP_ORDER_BASE_URL
-              value: "http://order-processing:8083"
+              value: "http://98.92.142.29:30083"
 ---
 apiVersion: v1
 kind: Service
