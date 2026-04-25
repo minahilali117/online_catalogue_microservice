@@ -11,6 +11,7 @@ const app = express();
 
 app.use(morgan('dev'));
 app.use(cors());
+app.use(express.json());
 
 const asyncHandler = (handler) => (req, res, next) => handler(req, res, next).catch(next);
 

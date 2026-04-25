@@ -76,6 +76,25 @@ terraform {
 3. For Terraform, copy `infra/terraform/terraform.tfvars.example` to `infra/terraform/terraform.tfvars` and set real values.
 4. For Ansible, copy `infra/ansible/inventory.example.ini` to `infra/ansible/inventory.ini` and set the EC2 public IP.
 
+### Non-Containerized Local Run:
+```powershell
+cd online_catalog
+npm install --prefix backend/catalog-management
+npm install --prefix backend/customer-support
+npm install --prefix backend/order-processing
+npm install --prefix frontend
+
+.\start-all.ps1
+
+# Test (same URLs)
+http://localhost:3000
+http://localhost:8081/products
+http://localhost:8082/customers
+http://localhost:8083/orders
+
+.\stop-all.ps1
+```
+
 ## Artifact 1 - Docker
 
 ### Requirement Mapping
