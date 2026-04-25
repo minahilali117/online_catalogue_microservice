@@ -1,3 +1,167 @@
+# ---
+# - name: Prepare EC2 for local Kubernetes cluster
+#   hosts: ec2
+#   become: true
+#   gather_facts: true
+
+#   vars:
+#     kubectl_version: "v1.30.4"
+#     kind_version: "v0.23.0"
+#     kind_cluster_name: "online-catalog"
+#     kind_config_path: "/home/ec2-user/kind-online-catalog.yaml"
+#     force_recreate_kind_cluster: true
+#     docker_compose_version: "v2.32.4"
+#     docker_compose_url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-linux-x86_64"
+#     kubectl_url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
+#     kind_url: "https://kind.sigs.k8s.io/dl/{{ kind_version }}/kind-linux-amd64"
+
+#   vars_files:
+#     - vars/repo.yml
+
+#   tasks:
+#     - name: Update all packages
+#       ansible.builtin.dnf:
+#         name: "*"
+#         state: latest
+
+#     - name: Install base tools
+#       ansible.builtin.dnf:
+#         name:
+#           - docker
+#           - git
+#           - tar
+#         state: present
+
+#     - name: Ensure Docker CLI plugins directory exists
+#       ansible.builtin.file:
+#         path: /usr/local/lib/docker/cli-plugins
+#         state: directory
+#         mode: "0755"
+
+#     - name: Install Docker Compose plugin
+#       ansible.builtin.get_url:
+#         url: "{{ docker_compose_url }}"
+#         dest: /usr/local/lib/docker/cli-plugins/docker-compose
+#         mode: "0755"
+
+#     - name: Enable and start Docker
+#       ansible.builtin.systemd:
+#         name: docker
+#         enabled: true
+#         state: started
+
+#     - name: Ensure ec2-user can use Docker
+#       ansible.builtin.user:
+#         name: ec2-user
+#         groups: docker
+#         append: true
+
+#     - name: Create local bin directory for ec2-user
+#       ansible.builtin.file:
+#         path: /home/ec2-user/bin
+#         state: directory
+#         owner: ec2-user
+#         group: ec2-user
+#         mode: "0755"
+
+#     - name: Create kubeconfig directory for ec2-user
+#       ansible.builtin.file:
+#         path: /home/ec2-user/.kube
+#         state: directory
+#         owner: ec2-user
+#         group: ec2-user
+#         mode: "0755"
+
+#     - name: Install kubectl
+#       ansible.builtin.get_url:
+#         url: "{{ kubectl_url }}"
+#         dest: /usr/local/bin/kubectl
+#         mode: "0755"
+
+#     - name: Install kind
+#       ansible.builtin.get_url:
+#         url: "{{ kind_url }}"
+#         dest: /usr/local/bin/kind
+#         mode: "0755"
+
+#     - name: Write kind config with host port mappings for NodePort access
+#       become_user: ec2-user
+#       ansible.builtin.copy:
+#         dest: "{{ kind_config_path }}"
+#         mode: "0644"
+#         content: |
+#           kind: Cluster
+#           apiVersion: kind.x-k8s.io/v1alpha4
+#           name: {{ kind_cluster_name }}
+#           nodes:
+#             - role: control-plane
+#               extraPortMappings:
+#                 - containerPort: 30080
+#                   hostPort: 3000
+#                   listenAddress: "0.0.0.0"
+#                   protocol: TCP
+#                 - containerPort: 30081
+#                   hostPort: 8081
+#                   listenAddress: "0.0.0.0"
+#                   protocol: TCP
+#                 - containerPort: 30082
+#                   hostPort: 8082
+#                   listenAddress: "0.0.0.0"
+#                   protocol: TCP
+#                 - containerPort: 30083
+#                   hostPort: 8083
+#                   listenAddress: "0.0.0.0"
+#                   protocol: TCP
+
+#     - name: Check whether kind cluster already exists
+#       become_user: ec2-user
+#       ansible.builtin.shell: |
+#         if kind get clusters | grep -qx {{ kind_cluster_name }}; then
+#           echo present
+#         else
+#           echo absent
+#         fi
+#       args:
+#         executable: /bin/bash
+#       register: kind_cluster_state
+#       changed_when: false
+
+#     - name: Delete existing kind cluster when recreation is enabled
+#       become_user: ec2-user
+#       ansible.builtin.command: "kind delete cluster --name {{ kind_cluster_name }}"
+#       when:
+#         - force_recreate_kind_cluster | bool
+#         - kind_cluster_state.stdout == 'present'
+
+#     - name: Create a single-node kind cluster with NodePort host mappings
+#       ansible.builtin.shell: |
+#         set -e
+#         KUBECONFIG=/home/ec2-user/.kube/config kind create cluster --name {{ kind_cluster_name }} --config {{ kind_config_path }}
+#       args:
+#         executable: /bin/bash
+#       when: kind_cluster_state.stdout == 'absent' or (force_recreate_kind_cluster | bool)
+
+#     - name: Ensure ec2-user owns kubeconfig files
+#       ansible.builtin.file:
+#         path: /home/ec2-user/.kube
+#         state: directory
+#         recurse: true
+#         owner: ec2-user
+#         group: ec2-user
+
+#     - name: Wait for cluster nodes to become ready
+#       become_user: ec2-user
+#       ansible.builtin.shell: |
+#         set -e
+#         export KUBECONFIG=/home/ec2-user/.kube/config
+#         kubectl wait --for=condition=Ready nodes --all --timeout=180s
+#       args:
+#         executable: /bin/bash
+
+#     - name: Sync and verify application repository
+#       ansible.builtin.import_tasks: tasks/repo_sync_and_deploy.yml
+
+
 ---
 - name: Prepare EC2 for local Kubernetes cluster
   hosts: ec2
@@ -10,8 +174,10 @@
     kind_cluster_name: "online-catalog"
     kind_config_path: "/home/ec2-user/kind-online-catalog.yaml"
     force_recreate_kind_cluster: true
+
     docker_compose_version: "v2.32.4"
     docker_compose_url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-linux-x86_64"
+
     kubectl_url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
     kind_url: "https://kind.sigs.k8s.io/dl/{{ kind_version }}/kind-linux-amd64"
 
@@ -56,14 +222,6 @@
         groups: docker
         append: true
 
-    - name: Create local bin directory for ec2-user
-      ansible.builtin.file:
-        path: /home/ec2-user/bin
-        state: directory
-        owner: ec2-user
-        group: ec2-user
-        mode: "0755"
-
     - name: Create kubeconfig directory for ec2-user
       ansible.builtin.file:
         path: /home/ec2-user/.kube
@@ -101,15 +259,15 @@
                   listenAddress: "0.0.0.0"
                   protocol: TCP
                 - containerPort: 30081
-                  hostPort: 8081
+                  hostPort: 30081
                   listenAddress: "0.0.0.0"
                   protocol: TCP
                 - containerPort: 30082
-                  hostPort: 8082
+                  hostPort: 30082
                   listenAddress: "0.0.0.0"
                   protocol: TCP
                 - containerPort: 30083
-                  hostPort: 8083
+                  hostPort: 30083
                   listenAddress: "0.0.0.0"
                   protocol: TCP
 
@@ -134,9 +292,11 @@
         - kind_cluster_state.stdout == 'present'
 
     - name: Create a single-node kind cluster with NodePort host mappings
+      become_user: ec2-user
       ansible.builtin.shell: |
         set -e
-        KUBECONFIG=/home/ec2-user/.kube/config kind create cluster --name {{ kind_cluster_name }} --config {{ kind_config_path }}
+        export KUBECONFIG=/home/ec2-user/.kube/config
+        kind create cluster --name {{ kind_cluster_name }} --config {{ kind_config_path }}
       args:
         executable: /bin/bash
       when: kind_cluster_state.stdout == 'absent' or (force_recreate_kind_cluster | bool)
