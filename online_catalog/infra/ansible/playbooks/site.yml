@@ -7,6 +7,9 @@
   vars:
     kubectl_version: "v1.30.4"
     kind_version: "v0.23.0"
+    kind_cluster_name: "online-catalog"
+    kind_config_path: "/home/ec2-user/kind-online-catalog.yaml"
+    force_recreate_kind_cluster: true
     docker_compose_version: "v2.32.4"
     docker_compose_url: "https://github.com/docker/compose/releases/download/{{ docker_compose_version }}/docker-compose-linux-x86_64"
     kubectl_url: "https://dl.k8s.io/release/{{ kubectl_version }}/bin/linux/amd64/kubectl"
@@ -81,14 +84,62 @@
         dest: /usr/local/bin/kind
         mode: "0755"
 
-    - name: Create a single-node kind cluster if it does not exist
+    - name: Write kind config with host port mappings for NodePort access
+      become_user: ec2-user
+      ansible.builtin.copy:
+        dest: "{{ kind_config_path }}"
+        mode: "0644"
+        content: |
+          kind: Cluster
+          apiVersion: kind.x-k8s.io/v1alpha4
+          name: {{ kind_cluster_name }}
+          nodes:
+            - role: control-plane
+              extraPortMappings:
+                - containerPort: 30080
+                  hostPort: 3000
+                  listenAddress: "0.0.0.0"
+                  protocol: TCP
+                - containerPort: 30081
+                  hostPort: 8081
+                  listenAddress: "0.0.0.0"
+                  protocol: TCP
+                - containerPort: 30082
+                  hostPort: 8082
+                  listenAddress: "0.0.0.0"
+                  protocol: TCP
+                - containerPort: 30083
+                  hostPort: 8083
+                  listenAddress: "0.0.0.0"
+                  protocol: TCP
+
+    - name: Check whether kind cluster already exists
+      become_user: ec2-user
       ansible.builtin.shell: |
-        set -e
-        if ! kind get clusters | grep -qx online-catalog; then
-          KUBECONFIG=/home/ec2-user/.kube/config kind create cluster --name online-catalog
+        if kind get clusters | grep -qx {{ kind_cluster_name }}; then
+          echo present
+        else
+          echo absent
         fi
       args:
         executable: /bin/bash
+      register: kind_cluster_state
+      changed_when: false
+
+    - name: Delete existing kind cluster when recreation is enabled
+      become_user: ec2-user
+      ansible.builtin.command: "kind delete cluster --name {{ kind_cluster_name }}"
+      when:
+        - force_recreate_kind_cluster | bool
+        - kind_cluster_state.stdout == 'present'
+
+    - name: Create a single-node kind cluster with NodePort host mappings
+      ansible.builtin.shell: |
+        set -e
+        KUBECONFIG=/home/ec2-user/.kube/config kind create cluster --name {{ kind_cluster_name }} --config {{ kind_config_path }}
+      args:
+        executable: /bin/bash
+      when: kind_cluster_state.stdout == 'absent' or (force_recreate_kind_cluster | bool)
 
     - name: Ensure ec2-user owns kubeconfig files
       ansible.builtin.file:
