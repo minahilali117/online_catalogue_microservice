@@ -17,11 +17,8 @@ Collaboration onboarding details are in `COLLABORATION_SETUP.md`.
 5. Artifact 5: CI/CD (GitHub Actions + Argo CD)
 
 ## Demo Ownership and Collaboration Model
-
-1. Demo presenter: project owner runs the live demo from owner laptop.
-2. Collaborator: works on remaining implementation steps (Artifact 4 and Artifact 5) and submits code via Git.
-3. AWS model: one AWS account, separate IAM users, shared Terraform backend.
-4. Terraform state: stored in S3 and locked with DynamoDB to prevent concurrent state corruption.
+1. AWS model: one AWS account, separate IAM users, shared Terraform backend.
+2. Terraform state: stored in S3 and locked with DynamoDB to prevent concurrent state corruption.
 
 Shared backend used by both collaborators:
 
@@ -63,9 +60,188 @@ Kubernetes on kind (EC2 public access):
 6. For infrastructure, Terraform provisions one EC2 node with networking and security resources.
 7. Ansible configures that EC2 node and bootstraps a local Kubernetes cluster (kind).
 
-## New User Setup
+## End-to-End CICD Pipeline
 
-### Local Prerequisites
+This project pipeline runs in this order:
+
+1. Code is pushed to GitHub.
+2. GitHub Actions builds and pushes 4 Docker images to Docker Hub (`ayaankhan17`).
+3. The workflow updates image tags in Kubernetes manifests and pushes the manifest commit.
+4. Argo CD (running on EC2 kind cluster) detects manifest changes and auto-syncs.
+5. Updated workloads are rolled out in namespace `online-catalog`.
+
+## Quickstart Command Playbooks
+
+Use this section first. It is organized for:
+
+1. First-time setup on a fresh machine/cloud environment.
+2. Regular repeat runs after first setup.
+3. Fast troubleshooting commands for common issues.
+
+### First-Time Setup (From Zero)
+
+1. Clone and prepare config files:
+
+```powershell
+git clone https://github.com/minahilali117/online_catalogue_microservice
+cd online_catalogue_microservice
+copy online_catalog\infra\terraform\terraform.tfvars.example online_catalog\infra\terraform\terraform.tfvars
+copy online_catalog\infra\ansible\inventory.example.ini online_catalog\infra\ansible\inventory.ini
+```
+
+2. Initialize and apply Terraform:
+
+```powershell
+cd online_catalog\infra\terraform
+terraform init
+terraform validate
+terraform plan -out tfplan
+terraform apply tfplan
+terraform output
+```
+
+3. Update EC2 IP in project files (inventory, frontend yaml/env, notes, docs) after Terraform apply:
+
+```powershell
+cd ..\..\..
+.\online_catalog\scripts\update-ec2-ip.ps1
+```
+
+4. Push any IP updates so repo/manifests are current:
+
+```powershell
+git add .
+git commit -m "chore: update EC2 IP references"
+git push origin master
+```
+
+5. Run Ansible bootstrap from WSL:
+
+```bash
+cd /mnt/c/Users/<your-user>/Documents/University/Semester\ 8/Cloud\ Computing/Project/online_catalogue_microservice/online_catalog/infra/ansible
+ansible -i inventory.ini ec2 -m ping
+ansible-playbook -i inventory.ini playbooks/site.yml
+```
+
+6. Verify cluster and Argo CD:
+
+```bash
+ssh -i ~/.ssh/online-catalog-key.pem ec2-user@<EC2_PUBLIC_IP>
+export KUBECONFIG=/home/ec2-user/.kube/config
+kubectl get nodes
+kubectl get pods -n argocd
+kubectl get application -n argocd
+```
+
+7. Configure GitHub secrets once:
+
+1. `DOCKERHUB_TOKEN`
+2. Workflow permission: Read and write
+
+8. Trigger pipeline by pushing code:
+
+```powershell
+git add .
+git commit -m "feat: trigger full CI/CD"
+git push origin master
+```
+
+### Following Times (Regular Usage)
+
+After first-time setup, use this shorter flow:
+
+1. Pull latest changes:
+
+```powershell
+git pull origin master
+```
+
+2. If EC2 was recreated, refresh infra and IP references:
+
+```powershell
+cd online_catalog\infra\terraform
+terraform plan -out tfplan
+terraform apply tfplan
+cd ..\..\..
+.\online_catalog\scripts\update-ec2-ip.ps1
+git add .
+git commit -m "chore: refresh EC2 IP"
+git push origin master
+```
+
+3. Re-run Ansible when host/cluster needs rebootstrap:
+
+```bash
+cd /mnt/c/Users/<your-user>/Documents/University/Semester\ 8/Cloud\ Computing/Project/online_catalogue_microservice/online_catalog/infra/ansible
+ansible-playbook -i inventory.ini playbooks/site.yml
+```
+
+4. For normal app updates, just push code and let CI/CD + Argo CD handle rollout.
+
+### Troubleshooting Commands (Copy/Paste)
+
+1. Check Terraform state and outputs:
+
+```powershell
+cd online_catalog\infra\terraform
+terraform state list
+terraform output
+```
+
+2. Check SSH and Ansible connectivity:
+
+```bash
+ssh -i ~/.ssh/online-catalog-key.pem ec2-user@<EC2_PUBLIC_IP>
+ansible -i inventory.ini ec2 -m ping
+```
+
+3. Check kind and Kubernetes health:
+
+```bash
+export KUBECONFIG=/home/ec2-user/.kube/config
+kubectl get nodes -o wide
+kubectl get pods -A
+kubectl get svc -n online-catalog
+kubectl describe pod <pod-name> -n online-catalog
+kubectl logs <pod-name> -n online-catalog --tail=200
+```
+
+4. Check Argo CD sync status and get password:
+
+```bash
+kubectl get application -n argocd
+kubectl describe application online-catalog -n argocd
+kubectl get pods -n argocd
+
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
+```
+
+5. Check external endpoints quickly:
+
+```bash
+curl -i http://<EC2_PUBLIC_IP>:30081/products
+curl -i http://<EC2_PUBLIC_IP>:30082/customers
+curl -i http://<EC2_PUBLIC_IP>:30083/orders
+```
+
+6. If kubectl is very slow on small EC2 instances, check pressure:
+
+```bash
+uptime
+free -h
+docker stats --no-stream
+```
+
+7. Restart workloads after manifest/image changes:
+
+```bash
+kubectl rollout restart deployment/catalog-management -n online-catalog
+kubectl rollout restart deployment/customer-support -n online-catalog
+kubectl rollout restart deployment/order-processing -n online-catalog
+kubectl rollout restart deployment/frontend -n online-catalog
+```
+
+## Prerequisites
 
 1. Git
 2. Docker Desktop (with Docker Compose)
@@ -73,36 +249,20 @@ Kubernetes on kind (EC2 public access):
 4. Terraform 1.8+
 5. AWS CLI configured with valid credentials
 6. WSL2 (Ubuntu recommended) for Ansible execution
+7. EC2 key pair in `us-east-1`
+8. SSH allowlist CIDR for your current public IP (`x.x.x.x/32`)
 
-### AWS Prerequisites
+## Local Non-Container Run (Optional)
 
-1. AWS region selected (this project uses us-east-1).
-2. EC2 key pair created in the same region.
-3. Your current public IP available for SSH allowlisting in CIDR form (x.x.x.x/32).
+Use this only if you want to run services without Docker:
 
-### First-Time Repository Setup
-
-1. Clone the repository.
-2. From project root, install local dependencies only if you need non-containerized local runs.
-3. For Terraform, copy `infra/terraform/terraform.tfvars.example` to `infra/terraform/terraform.tfvars` and set real values.
-4. For Ansible, copy `infra/ansible/inventory.example.ini` to `infra/ansible/inventory.ini` and set the EC2 public IP.
-
-### Non-Containerized Local Run:
 ```powershell
 cd online_catalog
 npm install --prefix backend/catalog-management
 npm install --prefix backend/customer-support
 npm install --prefix backend/order-processing
 npm install --prefix frontend
-
 .\start-all.ps1
-
-# Test (same URLs)
-http://localhost:3000
-http://localhost:8081/products
-http://localhost:8082/customers
-http://localhost:8083/orders
-
 .\stop-all.ps1
 ```
 
@@ -113,29 +273,9 @@ http://localhost:8083/orders
 1. Unique Dockerfile per microservice: completed.
 2. Automated image build: completed via Docker Compose.
 
-### Test Steps
+### Command Source
 
-Run from project root:
-
-```powershell
-cd online_catalog
-docker compose build
-docker compose up -d
-docker ps
-```
-
-Verify endpoints:
-
-1. http://localhost:3000
-2. http://localhost:8081/products
-3. http://localhost:8082/customers
-4. http://localhost:8083/orders
-
-Stop containers:
-
-```powershell
-docker compose down
-```
+Use `Quickstart Command Playbooks` above for execution commands.
 
 ### Evidence to Capture
 
@@ -159,26 +299,9 @@ docker compose down
 3. `terraform.tfvars` has real values, especially `ssh_ingress_cidr = "your.public.ip/32"`.
 4. `backend.tf` is configured for shared remote state.
 
-### Apply Steps
+### Command Source
 
-Run from Terraform directory:
-
-```powershell
-cd online_catalog/infra/terraform
-terraform init
-terraform validate
-terraform plan -out tfplan
-terraform apply tfplan
-terraform output
-```
-
-If you are collaborating, always run:
-
-```powershell
-terraform plan
-```
-
-before apply, and coordinate with teammate so only one person applies at a time.
+Use `Quickstart Command Playbooks` above for execution commands.
 
 ### What to Test After Apply
 
@@ -215,23 +338,9 @@ before apply, and coordinate with teammate so only one person applies at a time.
 2. `infra/ansible/inventory.example.ini`
 3. `infra/ansible/playbooks/site.yml`
 
-### What You Still Need To Do
+### Command Source
 
-1. Ensure the EC2 instance exists and is running.
-2. Get the public IP from `terraform output`.
-3. Copy `inventory.example.ini` to `inventory.ini` and replace the placeholder IP.
-4. Ensure your `.pem` file is available in WSL and referenced in inventory.
-5. If collaborator has updated infrastructure, run `terraform output` first and refresh inventory with current EC2 public IP.
-
-### Run Steps
-
-From WSL in the repo:
-
-```bash
-cd /mnt/d/university/SEMESTER\ 8/cloud\ computing/project3/online_catalog/infra/ansible
-ansible -i inventory.ini ec2 -m ping
-ansible-playbook -i inventory.ini playbooks/site.yml
-```
+Use `Quickstart Command Playbooks` above for execution commands.
 
 ### What to Test After Running
 
@@ -274,45 +383,9 @@ ansible-playbook -i inventory.ini playbooks/site.yml
 6. `online_catalog/kubernetes/kustomization.yaml`
 7. `online_catalog/scripts/push-images.ps1`
 
-### Build and Push Images to Docker Hub
+### Command Source
 
-Run from project folder:
-
-```powershell
-cd online_catalog
-docker login
-.\scripts\push-images.ps1 -Tag latest
-```
-
-Default Docker Hub namespace in script: `ayaankhan17`.
-
-### Deploy to Kubernetes on EC2
-
-1. Ensure old Docker Compose app stack is down on EC2:
-
-```bash
-cd /home/ec2-user/online_catalogue_microservice/online_catalog
-docker compose down
-```
-
-2. Apply manifests to kind:
-
-```bash
-export KUBECONFIG=/home/ec2-user/.kube/config
-cd /home/ec2-user/online_catalogue_microservice/online_catalog
-kubectl apply -k kubernetes
-```
-
-3. Verify rollout:
-
-```bash
-kubectl get pods -n online-catalog
-kubectl get svc -n online-catalog
-kubectl rollout status deployment/catalog-management -n online-catalog
-kubectl rollout status deployment/customer-support -n online-catalog
-kubectl rollout status deployment/order-processing -n online-catalog
-kubectl rollout status deployment/frontend -n online-catalog
-```
+Use `Quickstart Command Playbooks` above for execution commands.
 
 ### External Access URLs (from desktop browser)
 
@@ -341,23 +414,9 @@ kubectl rollout status deployment/frontend -n online-catalog
 2. `online_catalog/argocd/online-catalog-app.yaml`
 3. `online_catalog/infra/ansible/playbooks/tasks/setup_argocd.yml`
 
-### One-Time GitHub Setup
+### Setup Source
 
-In GitHub repository settings:
-
-1. Add secret `DOCKERHUB_TOKEN` (Docker Hub access token, not password).
-2. Workflow pushes to Docker Hub namespace `ayaankhan17`.
-3. Ensure GitHub Actions is enabled for the repository.
-4. Ensure workflow has permission to push commits (Settings -> Actions -> Workflow permissions -> Read and write).
-
-### Argo CD Auto-Setup via Ansible
-
-Run Ansible playbook (same command as Artifact 3):
-
-```bash
-cd /mnt/d/university/SEMESTER\ 8/cloud\ computing/project3/online_catalog/infra/ansible
-ansible-playbook -i inventory.ini playbooks/site.yml
-```
+Use `Quickstart Command Playbooks` above for first-time setup and repeat-run commands.
 
 This playbook now also:
 
@@ -376,21 +435,9 @@ This playbook now also:
 4. Argo CD detects the manifest commit and auto-syncs cluster workloads.
 5. Updated pods roll out automatically in namespace `online-catalog`.
 
-### Verification Commands on EC2
+### Verification Source
 
-```bash
-export KUBECONFIG=/home/ec2-user/.kube/config
-kubectl get application -n argocd
-kubectl get pods -n argocd
-kubectl get pods -n online-catalog
-kubectl describe application online-catalog -n argocd
-```
-
-Get initial Argo CD admin password:
-
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d && echo
-```
+Use `Troubleshooting Commands (Copy/Paste)` above for health and sync checks.
 
 ## Owner Demo Flow (Laptop)
 

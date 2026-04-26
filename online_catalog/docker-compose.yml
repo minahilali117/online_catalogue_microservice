@@ -18,7 +18,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 8082
-      ORDER_PROCESSING_BASE_URL: http://order-processing:8083
+      ORDER_PROCESSING_BASE_URL: http://localhost:8083
     ports:
       - "8082:8082"
     depends_on:
