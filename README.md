@@ -1,6 +1,10 @@
 
 # Online Catalog - Artifact-Focused Setup and Testing Guide
 
+**Authors:**
+**Ayaan Khan:	22i-0832**
+**Minahil Ali:	22i-0849**
+
 This README is a practical runbook for new users. It explains the microservices architecture, setup flow, and how to test each implemented artifact.
 
 This project now uses a shared-account collaboration model with separate IAM users and remote Terraform state.
@@ -435,32 +439,3 @@ This playbook now also:
 4. Argo CD detects the manifest commit and auto-syncs cluster workloads.
 5. Updated pods roll out automatically in namespace `online-catalog`.
 
-### Verification Source
-
-Use `Troubleshooting Commands (Copy/Paste)` above for health and sync checks.
-
-## Owner Demo Flow (Laptop)
-
-Use this sequence when you present:
-
-1. Pull latest code from main branch (including collaborator contributions).
-2. Run Docker artifact checks locally from your laptop.
-3. Run Terraform plan/apply from owner laptop only.
-4. Run Ansible checks from owner laptop only.
-5. Push container images to Docker Hub and apply Kubernetes manifests on EC2.
-6. Show NodePort URLs and API outputs as Artifact 4 evidence.
-7. Push a backend code change and show GitHub Actions + Argo CD auto-sync as Artifact 5 evidence.
-8. End with cleanup using `terraform destroy`.
-
-This keeps demo execution consistent and avoids concurrent infra changes during presentation.
-
-## Cost Cleanup (Free Tier Safety)
-
-Run this when demo/testing is done:
-
-```powershell
-cd online_catalog/infra/terraform
-terraform destroy
-```
-
-Capture one final screenshot of successful destroy for documentation.
