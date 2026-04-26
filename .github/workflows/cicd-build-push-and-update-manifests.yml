@@ -3,12 +3,6 @@ name: CI Build Push and Update Manifests
 on:
   push:
     branches: [master, main]
-    paths:
-      - "online_catalog/backend/catalog-management/**"
-      - "online_catalog/backend/customer-support/**"
-      - "online_catalog/backend/order-processing/**"
-      - "online_catalog/frontend/**"
-      - ".github/workflows/cicd-build-push-and-update-manifests.yml"
   workflow_dispatch:
 
 permissions:
