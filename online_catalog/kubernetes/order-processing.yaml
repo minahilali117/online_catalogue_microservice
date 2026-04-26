@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: order-processing
-          image: docker.io/ayaankhan17/order-processing:latest
+          image: docker.io/ayaankhan17/order-processing:sha-23e946fa6084ebd9d4849fdbccf07e864c7132d1
           imagePullPolicy: Always
           ports:
             - containerPort: 8083

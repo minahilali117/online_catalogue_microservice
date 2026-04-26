@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: docker.io/ayaankhan17/frontend:latest
+          image: docker.io/ayaankhan17/frontend:sha-23e946fa6084ebd9d4849fdbccf07e864c7132d1
           imagePullPolicy: Always
           ports:
             - containerPort: 3000
