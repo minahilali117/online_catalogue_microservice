@@ -2,8 +2,8 @@
 # Online Catalog - Artifact-Focused Setup and Testing Guide
 
 **Authors:**
-**Ayaan Khan:	22i-0832**
 **Minahil Ali:	22i-0849**
+**Ayaan Khan:	22i-0832**
 
 This README is a practical runbook for new users. It explains the microservices architecture, setup flow, and how to test each implemented artifact.
 
